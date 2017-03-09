@@ -1,20 +1,30 @@
-# ESP8266-MFRC522
-MFRC522 RFID module connected to ESP8266 (ESP-12) WiFi module
+# ESP8266-RFID-to-REST
+Simple but generic standalone RFID reader, posting identified UIDs to any upstream web server.
+Idea: Keep the device "as dumb" and stateless as possible... Any logic to parse UIDs etc can sit on a (better secured) server.
+Without soldering (i.e. just by connecting to USB) also WiFi password is not disclosed.
 
-Many thanks to nikxha from the ESP8266 forum
+Use case: Using this for FHEM for home automation. Based on detected card, certain activities can be triggered.
 
-## Requirements
-You have to install the Arduino IDE 1.6.4.
+## Configure
+Via USB CH340 Serial Port, the configuration can be easily updated:
+ssid=<YourSSID>
+pass=<YourWLANPassword>
+url=<YourURLForPOST>     - must be style like http://foo.bar.com:12345/exx")
+connect                  - Attempt to connect to WIFI. Only call after updating SSID and pass
+
+
+Once a card is detected, the string "uid=<UID>" is POSTed to the endpoint configured.
+
+## Setup
+You have to install the Arduino IDE 1.6.7+.
 * **Arduino** > **Preferences** > "Additional Boards Manager URLs:" and add: **http://arduino.esp8266.com/package_esp8266com_index.json**
 * **Arduino** > **Tools** > **Board** > **Boards Manager** > type in **ESP8266** and install the board
-* download MFRC522 module (see [Libraries](#libraries)) and copy folder to Arduino library path
+* download MFRC522 module (see [Libraries](#libraries)) via Library Manager
 
 ## Libraries
 * [RFID library by Miguel Balboa](https://github.com/miguelbalboa/rfid)
 
-## Wiring RFID RC522 module
-I have to update the picture. It seems that not all ESP boards working with wiring on picture.
-In this case - please use following wiring:
+## Wiring
 ```
 MISO - GPIO12 (hw spi)
 MOSI - GPIO13 (hw spi)
@@ -23,47 +33,38 @@ SS   - GPIO04 (free GPIO)
 RST  - GPIO05 (free GPIO)
 ```
 
-## define RFID module
-```c
-#include "MFRC522.h"
-#define RST_PIN	5 // RST-PIN for RC522 - RFID - SPI - Modul GPIO5 
-#define SS_PIN	4 // SDA-PIN for RC522 - RFID - SPI - Modul GPIO4 
-MFRC522 mfrc522(SS_PIN, RST_PIN);	// Create MFRC522 instance
+In addition, a button is supported
+```
+D3   - Internal Pullup - Connect to GROUND via button switch
+```
+If the button is pressed, "uid=button1" is posted.
+
+
+## FHEM
+Hint: Using this on FHEM side via hack:
+`fhem.cfg`
+```
+# Start background process to monitor RFID scanner
+{system("socat TCP4-LISTEN:8989,fork EXEC:/home/pi/custom/rfidPostListener.sh &")}
+
+define rfid_04:F2:C0:... dummy
+define rfid notify rfid_04.* {\
+  ... \
+}
 ```
 
-## Initialize RFID module
-```c
-void setup() {
-  Serial.begin(9600);    // Initialize serial communications
-  SPI.begin();	         // Init SPI bus
-  mfrc522.PCD_Init();    // Init MFRC522
-}
+`rfidPostListener.sh`
 ```
+#!/bin/bash
 
-## Read RFID tag
-```c
-void loop() { 
-  // Look for new cards
-  if ( ! mfrc522.PICC_IsNewCardPresent()) {
-    delay(50);
-    return;
-  }
-  // Select one of the cards
-  if ( ! mfrc522.PICC_ReadCardSerial()) {
-    delay(50);
-    return;
-  }
-  // Show some details of the PICC (that is: the tag/card)
-  Serial.print(F("Card UID:"));
-  dump_byte_array(mfrc522.uid.uidByte, mfrc522.uid.size);
-  Serial.println();
-}
+while read -r -t 0.2 line; do
+  #echo $line >&2
+  if [[ $line == uid=* ]]; then
+    echo "RFID $line" >&2
+    echo "trigger rfid_${line/uid=/}" |nc localhost 7072 >&2
+  fi
+done
 
-// Helper routine to dump a byte array as hex values to Serial
-void dump_byte_array(byte *buffer, byte bufferSize) {
-  for (byte i = 0; i < bufferSize; i++) {
-    Serial.print(buffer[i] < 0x10 ? " 0" : " ");
-    Serial.print(buffer[i], HEX);
-  }
-}
+echo "HTTP/1.0 200 OK"
+echo ""
 ```
