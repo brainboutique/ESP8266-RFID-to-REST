@@ -1,9 +1,16 @@
 # ESP8266-RFID-to-REST
-Simple but generic standalone RFID reader, posting identified UIDs to any upstream web server.
+Simple but generic standalone RFID reader, posting identified UIDs to any upstream web server for less than 5 bucks (USD / EUR).
+
 Idea: Keep the device "as dumb" and stateless as possible... Any logic to parse UIDs etc can sit on a (better secured) server.
-Without soldering (i.e. just by connecting to USB) also WiFi password is not disclosed.
+WiFi password is not disclosed on serial port, i.w. without unsoldering the EEPROM and reading it externally you should be safe, even if your RFID reader gets captured. Normally UID of cards / tags cannot be copied, so at least for basic security this should be sufficient.
 
 Use case: Using this for FHEM for home automation. Based on detected card, certain activities can be triggered.
+
+## Hardware and Shopping List
+1) Search aliexpress for "nodemcu ESP-12E CH340". For example: https://www.aliexpress.com/item/New-Wireless-module-NodeMcu-Lua-WIFI-Internet-of-Things-development-board-based-ESP8266-with-pcb-Antenna/32656775273.html - Approx 3€.
+2) Search aliexpress for "RFID-RC522". For example: https://www.aliexpress.com/item/MFRC-522-IC-card-sensing-module-RFID-Radio-frequency-RF-S50-IC-card-Key-chain-RFID/32613929702.html - Approx 2€.
+3) Some wire, maybe a push button, a nice enclosure ;-)
+
 
 ## Configure
 Via USB CH340 Serial Port, the configuration can be easily updated:
@@ -71,3 +78,6 @@ echo ""
 =======
 Arduino sketch for NodeMCU (ESP8266) and RFID-RC522 reader, POSTing identified cards to arbitrary POST endpoint via WiFi. Configurable via serial connection. May be used, for example, with FHEM to trigger actions based on scanned cards or tags,
 
+
+## Limitations
+- Data is not transmitted SSL protected. So within network, sniffer may be used to capture valid UIDs and replay.
